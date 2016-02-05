@@ -59,6 +59,9 @@ FlagRenderer3D::FlagRenderer3D(int gridWidth, int gridHeight):
             indexBuffer.push_back(i + j * gridWidth);
             indexBuffer.push_back((i + 1) + (j + 1) * gridWidth);
             indexBuffer.push_back(i + (j + 1) * gridWidth);
+            
+            // indexBuffer.push_back((i + 1) + j * gridWidth);
+            // indexBuffer.push_back(i + (j + 1) * gridWidth);
         }
     }
     m_nIndexCount = indexBuffer.size();
@@ -103,6 +106,7 @@ void FlagRenderer3D::drawGrid(const glm::vec3* positionArray, bool wireframe) {
             m_VertexBuffer[i + j * m_nGridWidth].position = positionArray[i + j * m_nGridWidth];
             
             glm::vec3 N(0.f);
+            glm::vec3 M(0.f);
 
             glm::vec3 A = positionArray[i + j * m_nGridWidth];
 
@@ -193,9 +197,11 @@ void FlagRenderer3D::drawGrid(const glm::vec3* positionArray, bool wireframe) {
             if(i > 0 && j < m_nGridHeight - 1) {
                 glm::vec3 B = positionArray[(i - 1) + (j + 1) * m_nGridWidth];
                 glm::vec3 C = positionArray[(i - 1) + j * m_nGridWidth];
+                // glm::vec3 D = positionArray[ i + (j-1) * m_nGridWidth];
 
                 glm::vec3 BxC = glm::cross(B - A, C - A);
                 float l = glm::length(BxC);
+
 
                 if(l > 0.0001f) {
                     N += BxC / l;
@@ -203,6 +209,7 @@ void FlagRenderer3D::drawGrid(const glm::vec3* positionArray, bool wireframe) {
             }
 
             m_VertexBuffer[i + j * m_nGridWidth].normal = N != glm::vec3(0.f) ? glm::normalize(N) : glm::vec3(0.f);
+            // m_VertexBuffer[i + j * m_nGridWidth].normal = M != glm::vec3(0.f) ? glm::normalize(M) : glm::vec3(0.f);
         }
     } 
 
