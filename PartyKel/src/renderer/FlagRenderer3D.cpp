@@ -204,7 +204,7 @@ void FlagRenderer3D::drawGrid(const glm::vec3* positionArray, bool wireframe) {
 
             m_VertexBuffer[i + j * m_nGridWidth].normal = N != glm::vec3(0.f) ? glm::normalize(N) : glm::vec3(0.f);
         }
-    }
+    } 
 
     glBufferData(GL_ARRAY_BUFFER, m_VertexBuffer.size() * sizeof(m_VertexBuffer[0]), m_VertexBuffer.data(), GL_DYNAMIC_DRAW);
 
