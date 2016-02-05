@@ -73,7 +73,7 @@ Renderer3D::~Renderer3D() {
     glDeleteBuffers(1, &m_SphereVBOID);
     glDeleteVertexArrays(1, &m_SphereVAOID);
 }
-
+ 
 void Renderer3D::clear() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }

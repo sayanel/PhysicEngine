@@ -9,7 +9,7 @@ namespace PartyKel {
 class Renderer3D {
 public:
     Renderer3D();
-
+ 
     ~Renderer3D();
 
     Renderer3D(const Renderer3D&) = delete;
@@ -17,7 +17,7 @@ public:
     Renderer3D& operator =(const Renderer3D&) = delete;
 
     void clear();
-
+ 
     void drawParticles(uint32_t count,
                        const glm::vec3* positionArray,
                        const float* massArray,
