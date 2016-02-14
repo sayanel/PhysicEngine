@@ -40,6 +40,9 @@ inline glm::vec3 brakeForce(float V, float dt, const glm::vec3& v1, const glm::v
 // Structure permettant de simuler un drapeau à l'aide un système masse-ressort
 struct Flag {
     int gridWidth, gridHeight; // Dimensions de la grille de points
+    int width, height;
+    glm::vec3 origin;
+    glm::vec3 scale;
 
     // Propriétés physique des points:
     std::vector<glm::vec3> positionArray;
@@ -60,15 +63,15 @@ struct Flag {
     // points. Chaque point a pour masse mass / (gridWidth * gridHeight).
     // La taille du drapeau en 3D est spécifié par les paramètres width et height
     Flag(float mass, float width, float height, int gridWidth, int gridHeight):
-        gridWidth(gridWidth), gridHeight(gridHeight),
+        gridWidth(gridWidth), gridHeight(gridHeight), width(width), height(height),
         positionArray(gridWidth * gridHeight),
         velocityArray(gridWidth * gridHeight, glm::vec3(0.0f)),
         // massArray(gridWidth * gridHeight, mass / (gridWidth * gridHeight)),
         massArray(gridWidth * gridHeight, 10),
-        forceArray(gridWidth * gridHeight, glm::vec3(0.f)) {
-        glm::vec3 origin(-0.5f * width, -0.5f * height, 0.f);
-        glm::vec3 scale(width / (gridWidth - 1), height / (gridHeight - 1), 1.f);
-
+        forceArray(gridWidth * gridHeight, glm::vec3(0.f)), 
+        origin(-0.5f * width, -0.5f * height, 0.f),
+        scale(width / (gridWidth - 1), height / (gridHeight - 1), 1.f){
+            
         for(int j = 0; j < gridHeight; ++j) {
             for(int i = 0; i < gridWidth; ++i) {
                 int k = i + j * gridWidth;
@@ -296,6 +299,20 @@ struct Flag {
 
     }
 
+    void reset(){
+
+        for(int j = 0; j < gridHeight; ++j) {
+            for(int i = 0; i < gridWidth; ++i) {
+                int k = i + j * gridWidth;
+                positionArray[k] = origin + glm::vec3(i, j, origin.z) * scale * 1.5f;
+                if(i==0) massArray[k] = 1000;
+                else if(i==1) massArray[k] = 50;
+                else massArray[k] = 50 / i; 
+            }  
+        }
+    
+    }
+
     void leapFrog(float dt){
 
         for(int j = 0; j < gridHeight; ++j) {
@@ -346,30 +363,35 @@ int main() {
     TrackballCamera camera;
     int mouseLastX, mouseLastY;
 
+    // Temps s'écoulant entre chaque frame
+    float dt = 0.f;
+
+    bool done = false;
+    bool wireframe = true;
+
     // GUI
     TwBar* gui = TwNewBar("Parametres");
 
-    atb::addVarRW(gui, ATB_VAR(flag.K0), "step=0.01");
-    atb::addVarRW(gui, ATB_VAR(flag.K1), "step=0.01");
-    atb::addVarRW(gui, ATB_VAR(flag.K2), "step=0.01");
-    atb::addVarRW(gui, ATB_VAR(flag.V0), "step=0.01");
-    atb::addVarRW(gui, ATB_VAR(flag.V1), "step=0.01");
-    atb::addVarRW(gui, ATB_VAR(flag.V2), "step=0.01");
     atb::addVarRW(gui, ATB_VAR(flag.L0.x), "step=0.01");
     atb::addVarRW(gui, ATB_VAR(flag.L0.y), "step=0.01");
     atb::addVarRW(gui, ATB_VAR(flag.L1), "step=0.01");
     atb::addVarRW(gui, ATB_VAR(flag.L2.x), "step=0.01");
     atb::addVarRW(gui, ATB_VAR(flag.L2.y), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.K0), "step=0.1");
+    atb::addVarRW(gui, ATB_VAR(flag.K1), "step=0.1");
+    atb::addVarRW(gui, ATB_VAR(flag.K2), "step=0.1");
+    atb::addVarRW(gui, ATB_VAR(flag.V0), "step=0.1");
+    atb::addVarRW(gui, ATB_VAR(flag.V1), "step=0.1");
+    atb::addVarRW(gui, ATB_VAR(flag.V2), "step=0.1");
     atb::addButton(gui, "reset", [&]() {
         renderer.clear(); 
+        renderer.setViewMatrix(camera.getViewMatrix());
+        // renderer.setProjMatrix(glm::perspective(70.f, float(WINDOW_WIDTH) / WINDOW_HEIGHT, 0.1f, 10000.f));
+        renderer.drawGrid(flag.positionArray.data(), wireframe);
+
+        flag.reset();
     });
 
-
-    // Temps s'écoulant entre chaque frame
-    float dt = 0.f;
-
-	bool done = false;
-    bool wireframe = true;
     while(!done) {
         wm.startMainLoop();
 
