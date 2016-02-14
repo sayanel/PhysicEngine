@@ -18,7 +18,7 @@ using namespace PartyKel;
 // Calcule une force de type ressort de Hook entre deux particules de positions P1 et P2
 // K est la résistance du ressort et L sa longueur à vide
 inline glm::vec3 hookForce(float K, float L, const glm::vec3& P1, const glm::vec3& P2) {
-    static const float epsilon = 0.0001;
+    static const float epsilon = 0.0001; 
 
     glm::vec3 force = K * (1- (L/ std::max(glm::distance(P1,P2), epsilon) ) ) * (P2-P1);
     // force = glm::vec3(0);
@@ -74,6 +74,7 @@ struct Flag {
                 int k = i + j * gridWidth;
                 positionArray[k] = origin + glm::vec3(i, j, origin.z) * scale * 1.5f;
                 // massArray[i + j * gridWidth] = 1 - ( i / (2*(gridHeight*gridWidth)));
+                // massArray[i + j * gridWidth] = mass/ ((i*i+1)*(gridWidth*gridHeight));
                 if(i==0) massArray[k] = 1000;
                 else if(i==1) massArray[k] = 50;
                 else massArray[k] = 50 / i; 
@@ -331,12 +332,13 @@ int main() {
     wm.setFramerate(30);
 
     // Initialisation de AntTweakBar (pour la GUI)
-    TwInit(TW_OPENGL_CORE, NULL);
+    TwInit(TW_OPENGL, NULL);
     TwWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     Flag flag(4096.f, 2, 1.5, 6, 4); // Création d'un drapeau // Flag(float mass, float width, float height, int gridWidth, int gridHeight)
-    glm::vec3 GRAVITY(0.00f, -0.01f, 0.f); // Gravité
-    glm::vec3 WIND = glm::sphericalRand(0.01f); // 0.001f
+    glm::vec3 GRAVITY(0.00f, -0.01f, 0.f); // Gravity
+    glm::vec3 WIND = glm::sphericalRand(0.001f); // 0.001f
+    // WIND = glm::vec3(0.0,0.0,0.1);
 
     FlagRenderer3D renderer(flag.gridWidth, flag.gridHeight);
     renderer.setProjMatrix(glm::perspective(70.f, float(WINDOW_WIDTH) / WINDOW_HEIGHT, 0.1f, 10000.f));
@@ -346,13 +348,21 @@ int main() {
 
     // GUI
     TwBar* gui = TwNewBar("Parametres");
-    float randomMoveScale = 0.01f;
 
-    // atb::addVarRW(gui, ATB_VAR(randomMoveScale), " step=0.01 ");
-    // atb::addVarRW(gui, ATB_VAR(flag.K0), "step=0.1");
-    // atb::addButton(gui, "reset", [&]() {
-    //     renderer.clear(); 
-    // });
+    atb::addVarRW(gui, ATB_VAR(flag.K0), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.K1), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.K2), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.V0), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.V1), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.V2), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.L0.x), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.L0.y), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.L1), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.L2.x), "step=0.01");
+    atb::addVarRW(gui, ATB_VAR(flag.L2.y), "step=0.01");
+    atb::addButton(gui, "reset", [&]() {
+        renderer.clear(); 
+    });
 
 
     // Temps s'écoulant entre chaque frame
@@ -384,26 +394,31 @@ int main() {
         // Gestion des evenements
 		SDL_Event e;
         while(wm.pollEvent(e)) {
-			switch(e.type) {
-				default:
-					break;
-				case SDL_QUIT:
-					done = true;
-					break;
-                case SDL_KEYDOWN:
-                    if(e.key.keysym.sym == SDLK_SPACE) {
-                        wireframe = !wireframe;
-                    }
-                case SDL_MOUSEBUTTONDOWN:
-                    if(e.button.button == SDL_BUTTON_WHEELUP) {
-                        camera.moveFront(0.2f);
-                    } else if(e.button.button == SDL_BUTTON_WHEELDOWN) {
-                        camera.moveFront(-0.2f);
-                    } else if(e.button.button == SDL_BUTTON_LEFT) {
-                        mouseLastX = e.button.x;
-                        mouseLastY = e.button.y;
-                    }
-			}
+            int handled = TwEventSDL(&e, SDL_MAJOR_VERSION, SDL_MINOR_VERSION);
+
+			if(!handled){
+                switch(e.type) {
+                    default:
+                        break;
+                    case SDL_QUIT:
+                        done = true;
+                        break;
+                    case SDL_KEYDOWN:
+                        if(e.key.keysym.sym == SDLK_SPACE) {
+                            wireframe = !wireframe;
+                        }
+                    case SDL_MOUSEBUTTONDOWN:
+                        if(e.button.button == SDL_BUTTON_WHEELUP) {
+                            camera.moveFront(0.2f);
+                        } else if(e.button.button == SDL_BUTTON_WHEELDOWN) {
+                            camera.moveFront(-0.2f);
+                        } else if(e.button.button == SDL_BUTTON_LEFT) {
+                            mouseLastX = e.button.x;
+                            mouseLastY = e.button.y;
+                        }
+                }                
+            }
+
 		}
 
         int mouseX, mouseY;
