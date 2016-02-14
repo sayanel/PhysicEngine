@@ -6,11 +6,12 @@
 
 #include <PartyKel/renderer/FlagRenderer3D.hpp>
 #include <PartyKel/renderer/TrackballCamera.hpp>
+#include <PartyKel/atb.hpp>
 
 #include <vector>
 
 static const Uint32 WINDOW_WIDTH = 1024;
-static const Uint32 WINDOW_HEIGHT = 768;
+static const Uint32 WINDOW_HEIGHT = 1024;
 
 using namespace PartyKel;
 
@@ -29,7 +30,7 @@ inline glm::vec3 hookForce(float K, float L, const glm::vec3& P1, const glm::vec
 // V est le paramètre du frein et dt le pas temporel
 inline glm::vec3 brakeForce(float V, float dt, const glm::vec3& v1, const glm::vec3& v2) {
     
-        glm::vec3 force = V * ((v2-v1)/dt);
+        glm::vec3 force = V * (v2-v1) / dt;
         return force;
 }
 
@@ -55,24 +56,28 @@ struct Flag {
     float K0, K1, K2; // Paramètres de résistance
     float V0, V1, V2; // Paramètres de frein
 
-    // Créé un drapeau discretisé sous la forme d'une grille contenant gridWidth * gridHeight
+    // Crée un drapeau discretisé sous la forme d'une grille contenant gridWidth * gridHeight
     // points. Chaque point a pour masse mass / (gridWidth * gridHeight).
     // La taille du drapeau en 3D est spécifié par les paramètres width et height
     Flag(float mass, float width, float height, int gridWidth, int gridHeight):
         gridWidth(gridWidth), gridHeight(gridHeight),
         positionArray(gridWidth * gridHeight),
-        velocityArray(gridWidth * gridHeight, glm::vec3(0.f)),
+        velocityArray(gridWidth * gridHeight, glm::vec3(0.0f)),
         // massArray(gridWidth * gridHeight, mass / (gridWidth * gridHeight)),
-        massArray(gridWidth * gridHeight, 1),
+        massArray(gridWidth * gridHeight, 10),
         forceArray(gridWidth * gridHeight, glm::vec3(0.f)) {
         glm::vec3 origin(-0.5f * width, -0.5f * height, 0.f);
         glm::vec3 scale(width / (gridWidth - 1), height / (gridHeight - 1), 1.f);
 
         for(int j = 0; j < gridHeight; ++j) {
             for(int i = 0; i < gridWidth; ++i) {
-                positionArray[i + j * gridWidth] = origin + glm::vec3(i, j, origin.z) * scale * 1.5f;
-                massArray[i + j * gridWidth] = 1 - ( i / (2*(gridHeight*gridWidth)));
-            }
+                int k = i + j * gridWidth;
+                positionArray[k] = origin + glm::vec3(i, j, origin.z) * scale * 1.5f;
+                // massArray[i + j * gridWidth] = 1 - ( i / (2*(gridHeight*gridWidth)));
+                if(i==0) massArray[k] = 1000;
+                else if(i==1) massArray[k] = 50;
+                else massArray[k] = 50 / i; 
+            }  
         }
 
         // Les longueurs à vide sont calculés à partir de la position initiale
@@ -83,60 +88,193 @@ struct Flag {
         L2 = 2.f * L0;
 
         // Ces paramètres sont à fixer pour avoir un système stable: HAVE FUN !
-        K0 = 0.01;
-        K1 = 1.f;
-        K2 = 1.f;
+        K0 = 0.01f;
+        K1 = 0.01f;
+        K2 = 0.01f;
 
         V0 = 0.1f;
         V1 = 0.1f;
         V2 = 0.1f;
+
+        // K0 = 1.8;
+        // K1 = 0.2;
+        // K2 = 0.25;
+
+        // V0 = 1.9f;
+        // V1 = 1.3f;
+        // V2 = 0.1f;
+
     }
 
-
+    #define DEBUG 0
     // Applique les forces internes sur chaque point du drapeau SAUF les points fixes
+    // TODO
+    // Régler les masses
     void applyInternalForces(float dt) {
-        
-        // On applique la Hook Force et le Frein Cinétique sur chaque couple de particule
-         for(int j = 0; j < gridHeight-1; ++j) {
-            for(int i = 1; i < gridWidth-1; ++i) {
-                int k = i + j * gridWidth;
-                forceArray[k] += hookForce(K0, L0.x, positionArray[k], positionArray[k + 1]) + hookForce(K0, L0.y, positionArray[k], positionArray[k + gridWidth]);
-                forceArray[k+1] -= hookForce(K0, L0.x, positionArray[k], positionArray[k + 1]);
-                forceArray[k + gridWidth] -= hookForce(K0, L0.y, positionArray[k], positionArray[k + gridWidth]);
+        int zero=0;
+        // TOPOLOGIE 0
 
-                forceArray[k] += brakeForce(V0, dt, velocityArray[k], velocityArray[k+1]) + brakeForce(V0, dt, velocityArray[k], velocityArray[k+gridWidth]);
-                forceArray[k+1] -= brakeForce(V0, dt, velocityArray[k], velocityArray[k+1]);
-                forceArray[k+gridWidth] -= brakeForce(V0, dt, velocityArray[k], velocityArray[k+gridWidth]);
+        // On applique la Hook Force et le Frein Cinétique sur chaque couple de particule
+        for(int j = 0; j < gridHeight-1; ++j) {
+            for(int i = 0; i < gridWidth-1; ++i) {
+
+                int k = i + j * gridWidth;
+
+                glm::vec3 HOOK_X = hookForce(K0, L0.x, positionArray[k], positionArray[k+1]);
+                glm::vec3 HOOK_Y = hookForce(K0, L0.y, positionArray[k], positionArray[k+gridWidth]);
+
+                glm::vec3 BRAKE_X = brakeForce(V0, dt, velocityArray[k], velocityArray[k+1]);
+                glm::vec3 BRAKE_Y = brakeForce(V0, dt, velocityArray[k], velocityArray[k+gridWidth]);
+
+                if(i>0){
+                    forceArray[k] += HOOK_X + HOOK_Y + BRAKE_X + BRAKE_Y;
+                }
+                // else forceArray[k] += HOOK_Y + BRAKE_Y;
+                forceArray[k+1] -= HOOK_X + BRAKE_X;
+                forceArray[k+gridWidth] -= HOOK_Y + BRAKE_Y;
+ 
+                if(DEBUG) std::cout << "TOPO 0: (" << k << " " << k+1 << ")" << " && (" << k << " " << k+gridWidth << ")" << std::endl;
+            }
+        }
+
+        // dernière colonne
+        for(int j = 0; j < gridHeight-1; ++j) {
+            
+            int k = j + (j+1) * (gridWidth-1);
+
+            glm::vec3 HOOK_Y = hookForce(K0, L0.y, positionArray[k], positionArray[k+gridWidth]);
+            glm::vec3 BRAKE_Y = brakeForce(V0, dt, velocityArray[k], velocityArray[k+gridWidth]);
+
+            forceArray[k] += HOOK_Y + BRAKE_Y;
+            forceArray[k + gridWidth] -= HOOK_Y + BRAKE_Y; 
+
+            if(DEBUG) std::cout << "TOPO 0: (" << k << " " << k+gridWidth << ") last col" << std::endl; 
+        }
+
+        //dernière ligne 
+        for(int i = 0; i < gridWidth-1; ++i){
+
+            int k = i + (gridWidth) * (gridHeight-1);
+
+            glm::vec3 HOOK_X = hookForce(K0, L0.x, positionArray[k], positionArray[k+1]);
+            glm::vec3 BRAKE_X = brakeForce(V0, dt, velocityArray[k], velocityArray[k+1]);
+
+            forceArray[k] += HOOK_X + BRAKE_X;
+            forceArray[k+1] -= HOOK_X + BRAKE_X; 
+
+            if(DEBUG) std::cout << "TOPO 0: (" << k << " " << k+1 << ") last line" << std::endl;
+        }
+
+        // dernière colonne et dernière ligne (la particule en bas à droite)
+        // forceArray[gridHeight-2] += hookForce(K0, L0.y, positionArray[gridHeight-2], positionArray[gridHeight-1]);
+        // forceArray[gridHeight-2] += brakeForce(V0, dt, velocityArray[gridHeight-2], velocityArray[gridHeight-1]);
+        // forceArray[gridHeight-1] -= hookForce(K0, L0.y, positionArray[gridHeight-2], positionArray[gridHeight-1]);
+        // forceArray[gridHeight-1] -= brakeForce(V0, dt, velocityArray[gridHeight-2], velocityArray[gridHeight-1]);
+        // std::cout << "-->(" << gridHeight-2 << " " << gridHeight-1 << ")" << std::endl;
+
+
+
+        // TOPOLOGIE 1
+
+        for(int j = 0; j < gridHeight-1; ++j) {
+            for(int i = 0; i < gridWidth-1; ++i) {
+
+                int k = i + j * gridWidth;
+
+                glm::vec3 HOOK_DIAGD = hookForce(K1, L1, positionArray[k], positionArray[k+1+gridWidth]);
+                glm::vec3 HOOK_DIAGG = hookForce(K1, L1, positionArray[k], positionArray[k-1+gridWidth]);
+
+                glm::vec3 BRAKE_DIAGD = brakeForce(V1, dt, velocityArray[k], velocityArray[k+1+gridWidth]);
+                glm::vec3 BRAKE_DIAGG = brakeForce(V1, dt, velocityArray[k], velocityArray[k-1+gridWidth]);
+
+                if(i>0) 
+                    forceArray[k] += HOOK_DIAGD + HOOK_DIAGG + BRAKE_DIAGD + BRAKE_DIAGG;
+                if(i>0)
+                    forceArray[k-1+gridWidth] -= HOOK_DIAGG + BRAKE_DIAGG;
+
+                forceArray[k+1+gridWidth] -= HOOK_DIAGD + BRAKE_DIAGD;
+
+                if(i==0 && DEBUG) std::cout << "TOPO 1: " << "(" << k << " " << k+1+gridWidth << ") i>0" << std::endl;
+                else if(DEBUG) std::cout << "TOPO 1: (" << k << " " << k+1+gridWidth << ")" << " && (" << k << " " << k-1+gridWidth << ")" << std::endl;
 
             }
         }
-        // première colonne
-        for(int j = 0; j < gridHeight; ++j) {
-            int k = j;
-            // positionArray[k] += hookForce(K0, L0.y, positionArray[k], positionArray[k + 1]);
-            forceArray[k + 1] -= hookForce(K0, L0.y, positionArray[k], positionArray[k + 1]);
 
-            forceArray[k + 1] -= brakeForce(V0, dt, velocityArray[k], velocityArray[k+1]);
-        }
         // dernière colonne
         for(int j = 0; j < gridHeight-1; ++j) {
-            int k = j * gridWidth;
-            forceArray[k] += hookForce(K0, L0.y, positionArray[k], positionArray[k + gridWidth]);
-            forceArray[k + gridWidth] -= hookForce(K0, L0.y, positionArray[k], positionArray[k + gridWidth]);
+            
+            int k = j + (j+1) * (gridWidth-1);
 
-            forceArray[k] += brakeForce(V0, dt, velocityArray[k], velocityArray[k+gridWidth]);
-            forceArray[k + gridWidth] -= brakeForce(V0, dt, velocityArray[k], velocityArray[k + gridWidth]);
+            glm::vec3 HOOK_DIAGG = hookForce(K1, L1, positionArray[k], positionArray[k-1+gridWidth]);
+            glm::vec3 BRAKE_DIAGG = brakeForce(V1, dt, velocityArray[k], velocityArray[k-1+gridWidth]);
 
+            forceArray[k] += HOOK_DIAGG + BRAKE_DIAGG;
+            forceArray[k-1+gridWidth] -= HOOK_DIAGG + BRAKE_DIAGG;
+
+            if(DEBUG) std::cout << "TOPO 1: (" << k << " " << k-1+gridWidth << ") last col" << std::endl; 
         }
-        // dernière colonne et dernière ligne (la particule en bas à droite)
-        forceArray[gridHeight-2] += hookForce(K0, L0.y, positionArray[gridHeight-2], positionArray[gridHeight-1]);
-        forceArray[gridHeight-1] -= hookForce(K0, L0.y, positionArray[gridHeight-2], positionArray[gridHeight-1]);
-
-        forceArray[gridHeight-2] += brakeForce(V0, dt, velocityArray[gridHeight-2], velocityArray[gridHeight-1]);
-        forceArray[gridHeight-1] -= brakeForce(V0, dt, velocityArray[gridHeight-2], velocityArray[gridHeight-1]);
-       
 
 
+
+        // TOPOLOGIE 2
+
+        for(int j = 0; j < gridHeight-2; ++j) {
+            for(int i = 0; i < gridWidth-2; ++i) {
+
+                int k = i + j * gridWidth;
+
+                glm::vec3 HOOK_X2 = hookForce(K2, L2.x, positionArray[k], positionArray[k+2]);
+                glm::vec3 HOOK_Y2 = hookForce(K2, L2.y, positionArray[k], positionArray[k+2*gridWidth]);
+
+                glm::vec3 BRAKE_X2 = brakeForce(V2, dt, velocityArray[k], velocityArray[k+2]);
+                glm::vec3 BRAKE_Y2 = brakeForce(V2, dt, velocityArray[k], velocityArray[k+2*gridWidth]);
+
+                // if(i>0) 
+                    forceArray[k] += HOOK_X2 + HOOK_Y2 + BRAKE_X2 + BRAKE_Y2;
+                
+                forceArray[k+2] -= HOOK_X2 + BRAKE_X2;
+                forceArray[k+2*gridWidth] -= HOOK_Y2 + BRAKE_Y2;
+                
+                // if(i==0) std::cout "";
+                if(DEBUG) std::cout << "TOPO 2: (" << k << " " << k+2 << ")" << " && (" << k << " " << k+2*gridWidth << ")" << std::endl;
+            }
+        }
+
+        // dernières colonnes (Y only)
+        for(int j = 0; j < gridHeight-2; ++j) {
+
+            int k = j + (j+1) * (gridWidth-1);
+
+            glm::vec3 HOOK_Y2 = hookForce(K2, L2.y, positionArray[k], positionArray[k+2*gridWidth]);
+            glm::vec3 BRAKE_Y2 = brakeForce(V2, dt, velocityArray[k], velocityArray[k+2*gridWidth]);
+            forceArray[k] += HOOK_Y2 + BRAKE_Y2;
+            forceArray[k+2*gridWidth] -= HOOK_Y2 + BRAKE_Y2; 
+            if(DEBUG) std::cout << "TOPO 2: (" << k << " " << k+2*gridWidth << ") last col" << std::endl; 
+
+            HOOK_Y2 = hookForce(K2, L2.y, positionArray[k-1], positionArray[k+2*gridWidth-1]);
+            BRAKE_Y2 = brakeForce(V2, dt, velocityArray[k-1], velocityArray[k+2*gridWidth-1]);
+            forceArray[k-1] += HOOK_Y2 + BRAKE_Y2;
+            forceArray[k+2*gridWidth-1] -= HOOK_Y2 + BRAKE_Y2; 
+            if(DEBUG) std::cout << "TOPO 2: (" << k-1 << " " << k+2*gridWidth-1 << ") penultimate col" << std::endl; 
+        }
+
+        //dernières lignes (X only)
+        for(int i = 0; i < gridWidth-2; ++i){
+
+            int k = i + (gridWidth) * (gridHeight-1);
+
+            glm::vec3 HOOK_X2 = hookForce(K2, L2.x, positionArray[k], positionArray[k+2]);
+            glm::vec3 BRAKE_X2 = brakeForce(V2, dt, velocityArray[k], velocityArray[k+2]);
+            forceArray[k] += HOOK_X2 + BRAKE_X2;
+            forceArray[k+2] -= HOOK_X2 + BRAKE_X2; 
+            if(DEBUG) std::cout << "TOPO 2: (" << k << " " << k+2 << ") last line" << std::endl;
+
+            HOOK_X2 = hookForce(K2, L2.x, positionArray[k-gridWidth], positionArray[k+2-gridWidth]);
+            BRAKE_X2 = brakeForce(V2, dt, velocityArray[k-gridWidth], velocityArray[k+2-gridWidth]);
+            forceArray[k-gridWidth] += HOOK_X2 + BRAKE_X2;
+            forceArray[k+2-gridWidth] -= HOOK_X2 + BRAKE_X2; 
+            if(DEBUG) std::cout << "TOPO 2: (" << k-gridWidth << " " << k+2-gridWidth << ") penultimate line" << std::endl;
+        }
 
 
     }
@@ -147,7 +285,8 @@ struct Flag {
         for(int j = 0; j < gridHeight; ++j) {
             for(int i = 0; i < gridWidth; ++i) {
                 int k = i + j * gridWidth;
-                if(k%gridWidth!=0){
+                // if(k%gridWidth!=0){
+                if(i!=0){
                     forceArray[k] += F;     
                 }
             }
@@ -177,6 +316,7 @@ struct Flag {
 
         leapFrog(dt);
 
+        // on reset les forces à 0
         for(int s=0; s < forceArray.size(); ++s){
             forceArray[s] = glm::vec3(0.f);
         }
@@ -190,15 +330,30 @@ int main() {
     WindowManager wm(WINDOW_WIDTH, WINDOW_HEIGHT, "Fun with Flags");
     wm.setFramerate(30);
 
+    // Initialisation de AntTweakBar (pour la GUI)
+    TwInit(TW_OPENGL_CORE, NULL);
+    TwWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    Flag flag(4096.f, 2, 1.5, 32, 16); // Création d'un drapeau // Flag(float mass, float width, float height, int gridWidth, int gridHeight)
-    glm::vec3 G(0.f, -0.001f, 0.f); // Gravité
+    Flag flag(4096.f, 2, 1.5, 6, 4); // Création d'un drapeau // Flag(float mass, float width, float height, int gridWidth, int gridHeight)
+    glm::vec3 GRAVITY(0.00f, -0.01f, 0.f); // Gravité
+    glm::vec3 WIND = glm::sphericalRand(0.01f); // 0.001f
 
     FlagRenderer3D renderer(flag.gridWidth, flag.gridHeight);
-    renderer.setProjMatrix(glm::perspective(70.f, float(WINDOW_WIDTH) / WINDOW_HEIGHT, 0.1f, 100.f));
+    renderer.setProjMatrix(glm::perspective(70.f, float(WINDOW_WIDTH) / WINDOW_HEIGHT, 0.1f, 10000.f));
 
     TrackballCamera camera;
     int mouseLastX, mouseLastY;
+
+    // GUI
+    TwBar* gui = TwNewBar("Parametres");
+    float randomMoveScale = 0.01f;
+
+    // atb::addVarRW(gui, ATB_VAR(randomMoveScale), " step=0.01 ");
+    // atb::addVarRW(gui, ATB_VAR(flag.K0), "step=0.1");
+    // atb::addButton(gui, "reset", [&]() {
+    //     renderer.clear(); 
+    // });
+
 
     // Temps s'écoulant entre chaque frame
     float dt = 0.f;
@@ -214,13 +369,17 @@ int main() {
         renderer.setViewMatrix(camera.getViewMatrix());
         renderer.drawGrid(flag.positionArray.data(), wireframe);
 
+        
+
         // Simulation
         if(dt > 0.f) {
-            flag.applyExternalForce(G); // Applique la gravité
-            flag.applyExternalForce(glm::sphericalRand(0.1f)); // Applique un "vent" de direction aléatoire et de force 0.1 Newtons
+            flag.applyExternalForce(GRAVITY); // Applique la gravité
+            flag.applyExternalForce(WIND); // Applique un "vent" de direction aléatoire et de force 0.1 Newtons
             flag.applyInternalForces(dt); // Applique les forces internes
             flag.update(dt); // Mise à jour du système à partir des forces appliquées
         }
+
+        TwDraw();
 
         // Gestion des evenements
 		SDL_Event e;
@@ -255,6 +414,14 @@ int main() {
             mouseLastX = mouseX;
             mouseLastY = mouseY;
         }
+
+
+
+
+
+
+
+
 
         // Mise à jour de la fenêtre
         dt = wm.update();
